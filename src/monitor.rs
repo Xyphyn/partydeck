@@ -21,7 +21,12 @@ impl Monitor {
     pub fn height(&self) -> u32 {
         self.height
     }
+
+    pub fn new(name: String, width: u32, height: u32) -> Self {
+        Self {name, width, height}
+    }
 }
+
 
 // This should mimic the SDL monitor retrival used by gamescope, while avoiding all of SDL.
 fn get_monitors_x11() -> Result<Vec<Monitor>, Box<dyn std::error::Error>> {

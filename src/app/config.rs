@@ -30,6 +30,10 @@ pub struct PartyConfig {
     pub gamescope_force_grab_cursor: bool,
     #[serde(default = "default_true")]
     pub kbm_support: bool,
+    #[serde(default = "default_true")]
+    pub gamescope_resize_support: bool,
+    #[serde(default = "default_true")]
+    pub gamescope_force_fullscreen: bool,
     #[serde(default)]
     pub proton_version: String,
     #[serde(default = "default_true")]
@@ -48,6 +52,7 @@ pub struct PartyConfig {
     pub disable_mount_gamedirs: bool,
     #[serde(default)]
     pub check_for_updates: bool,
+    pub nested_compositor: Option<String>,
 }
 
 impl Default for PartyConfig {
@@ -58,6 +63,8 @@ impl Default for PartyConfig {
             gamescope_sdl_backend: true,
             gamescope_force_grab_cursor: false,
             kbm_support: true,
+            gamescope_resize_support: true,
+            gamescope_force_fullscreen: true,
             proton_version: "".to_string(),
             proton_separate_pfxs: true,
             proton_wow64: true,
@@ -67,6 +74,7 @@ impl Default for PartyConfig {
             profile_unique_dirs: true,
             disable_mount_gamedirs: false,
             check_for_updates: true,
+            nested_compositor: None,
         }
     }
 }
