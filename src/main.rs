@@ -17,9 +17,9 @@ use crate::profiles::remove_guest_profiles;
 use crate::util::*;
 
 fn main() -> eframe::Result {
-    // Our sdl/multimonitor stuff essentially depends on us running through x11.
-    unsafe {
-        std::env::set_var("SDL_VIDEODRIVER", "x11");
+    if std::env::args().any(|arg| arg == "--help") {
+        println!("{}", USAGE_TEXT);
+        std::process::exit(0);
     }
 
     // Using x11 direct monitor queries (hopefully) identical to SDL, just without the full SDL library
@@ -36,11 +36,6 @@ fn main() -> eframe::Result {
     }
 
     let args: Vec<String> = std::env::args().collect();
-
-    if std::env::args().any(|arg| arg == "--help") {
-        println!("{}", USAGE_TEXT);
-        std::process::exit(0);
-    }
 
     if let Some(layout_index) = args.iter().position(|arg| arg == "--internal-layout") {
         if let Some(next_arg) = args.get(layout_index + 1) {
@@ -168,7 +163,6 @@ fn main() -> eframe::Result {
 }
 
 static USAGE_TEXT: &str = r#"
-{}
 Usage: partydeck [OPTIONS]
 
 Options:
