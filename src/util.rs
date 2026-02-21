@@ -11,12 +11,12 @@ use std::os::fd::IntoRawFd;
 use std::path::PathBuf;
 use std::process::Command;
 
+use nix::fcntl;
 use nix::poll;
 use nix::unistd;
-use nix::fcntl;
-use std::os::fd::FromRawFd;
 use nix::unistd::Pid;
 use std::env;
+use std::os::fd::FromRawFd;
 
 pub fn msg(title: &str, contents: &str) {
     let _ = dialog::Message::new(contents).title(title).show();
@@ -201,7 +201,6 @@ pub fn check_for_partydeck_update() -> bool {
     false
 }
 
-
 pub trait SanitizePath {
     fn sanitize_path(&self) -> String;
 }
@@ -276,44 +275,89 @@ impl OsFmt for PathBuf {
     }
 }
 
-pub fn spawn_comp_and_get_display(comp_executable: &str, primary_monitor: Monitor) -> Option<(String, String, Monitor, Pid)> {
+pub fn spawn_comp_and_get_display(
+    comp_executable: &str,
+    primary_monitor: Monitor,
+) -> Option<(String, String, Monitor, Pid)> {
     let base_program_buf = env::current_exe().expect("Failed to get partydeck executable");
     let base_program = base_program_buf.to_str()?;
-    
+
     let (read_fd, write_fd) = unistd::pipe().unwrap();
 
-    let flags = fcntl::FdFlag::from_bits_truncate(fcntl::fcntl(&write_fd, fcntl::FcntlArg::F_GETFD).unwrap());
-    fcntl::fcntl(&write_fd, fcntl::FcntlArg::F_SETFD(flags & !fcntl::FdFlag::FD_CLOEXEC)).expect("Failed to open pipe to river");
+    let flags = fcntl::FdFlag::from_bits_truncate(
+        fcntl::fcntl(&write_fd, fcntl::FcntlArg::F_GETFD).unwrap(),
+    );
+    fcntl::fcntl(
+        &write_fd,
+        fcntl::FcntlArg::F_SETFD(flags & !fcntl::FdFlag::FD_CLOEXEC),
+    )
+    .expect("Failed to open pipe to river");
 
     let mut cmd = std::process::Command::new(comp_executable);
 
     match comp_executable {
         "river" => {
-            cmd.args(["-c",format!("{} --internal-layout {}:{}:{}", base_program, &write_fd.into_raw_fd(), primary_monitor.width(), primary_monitor.height()).as_str()]);
-        },
-        "kwin_wayland"  => {
             cmd.args([
-                "--xwayland","--exit-with-session",
-                "--height", &primary_monitor.height().to_string(),
-                "--width", &primary_monitor.width().to_string(),
-                "--",format!("{} --internal-layout {}:{}:{}", base_program, &write_fd.into_raw_fd(), primary_monitor.width(), primary_monitor.height()).as_str()]);
-        },
-        _=> {
-            println!("Unknown comp ({}); trusting that it works, MAY FAIL", comp_executable);
-            cmd.args(["--",format!("{} --internal-layout {}:{}:{}", base_program, &write_fd.into_raw_fd(), primary_monitor.width(), primary_monitor.height()).as_str()]);
-        },
-    }
-    
-
-    let child_pid;
-    match cmd.spawn() {
-        Ok(child) => {child_pid = Pid::from_raw((child.id()) as i32)},
-        Err(e) => {
-            eprintln!("[partydeck] Failed to start COMP ({}): {}", comp_executable, e);
-            return None;
+                "-c",
+                format!(
+                    "{} --internal-layout {}:{}:{}",
+                    base_program,
+                    &write_fd.into_raw_fd(),
+                    primary_monitor.width(),
+                    primary_monitor.height()
+                )
+                .as_str(),
+            ]);
+        }
+        "kwin_wayland" => {
+            cmd.args([
+                "--xwayland",
+                "--exit-with-session",
+                "--height",
+                &primary_monitor.height().to_string(),
+                "--width",
+                &primary_monitor.width().to_string(),
+                "--",
+                format!(
+                    "{} --internal-layout {}:{}:{}",
+                    base_program,
+                    &write_fd.into_raw_fd(),
+                    primary_monitor.width(),
+                    primary_monitor.height()
+                )
+                .as_str(),
+            ]);
+        }
+        _ => {
+            println!(
+                "Unknown comp ({}); trusting that it works, MAY FAIL",
+                comp_executable
+            );
+            cmd.args([
+                "--",
+                format!(
+                    "{} --internal-layout {}:{}:{}",
+                    base_program,
+                    &write_fd.into_raw_fd(),
+                    primary_monitor.width(),
+                    primary_monitor.height()
+                )
+                .as_str(),
+            ]);
         }
     }
 
+    let child_pid;
+    match cmd.spawn() {
+        Ok(child) => child_pid = Pid::from_raw((child.id()) as i32),
+        Err(e) => {
+            eprintln!(
+                "[partydeck] Failed to start COMP ({}): {}",
+                comp_executable, e
+            );
+            return None;
+        }
+    }
 
     let mut fds = [poll::PollFd::new(read_fd.as_fd(), poll::PollFlags::POLLIN)];
     let res = poll::poll(&mut fds, 2000 as u16).unwrap_or(0);
@@ -330,23 +374,33 @@ pub fn spawn_comp_and_get_display(comp_executable: &str, primary_monitor: Monito
     reader.read_exact(&mut len_buf).expect("Failed to read FD");
     let x11_disp_len = u32::from_be_bytes(len_buf) as usize;
 
-
     reader.read_exact(&mut len_buf).expect("Failed to read FD");
     let monitor_width = u32::from_be_bytes(len_buf);
     reader.read_exact(&mut len_buf).expect("Failed to read FD");
     let monitor_height = u32::from_be_bytes(len_buf);
     let remote_monitor = Monitor::new("REMOTE_MONITOR".to_owned(), monitor_width, monitor_height);
 
-
     let mut way_disp_buf = vec![0u8; way_disp_len];
-    reader.read_exact(&mut way_disp_buf).expect("Failed to read FD");
+    reader
+        .read_exact(&mut way_disp_buf)
+        .expect("Failed to read FD");
     let mut x11_disp_buf = vec![0u8; x11_disp_len];
-    reader.read_exact(&mut x11_disp_buf).expect("Failed to read FD");
+    reader
+        .read_exact(&mut x11_disp_buf)
+        .expect("Failed to read FD");
 
     let way_disp = String::from_utf8(way_disp_buf).expect("Failed to decode FD");
     let x11_disp = String::from_utf8(x11_disp_buf).expect("Failed to decode FD");
 
-    println!("Got DISPLAY_WAYLAND from COMP: {} and DISPLAY: {}, with resolution: {}x{}", way_disp, x11_disp, monitor_width, monitor_height);
-    
-    return Some((way_disp.to_string(), x11_disp.to_string(), remote_monitor, child_pid));
+    println!(
+        "Got DISPLAY_WAYLAND from COMP: {} and DISPLAY: {}, with resolution: {}x{}",
+        way_disp, x11_disp, monitor_width, monitor_height
+    );
+
+    return Some((
+        way_disp.to_string(),
+        x11_disp.to_string(),
+        remote_monitor,
+        child_pid,
+    ));
 }

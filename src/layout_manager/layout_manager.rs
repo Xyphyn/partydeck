@@ -7,8 +7,8 @@ use wayland_client::Connection;
 use wayland_client::Dispatch;
 use wayland_client::Proxy;
 use wayland_client::protocol::wl_output::WlOutput;
+use wayland_client::protocol::wl_registry::Event as RegistryEvent;
 use wayland_client::protocol::wl_registry::WlRegistry;
-use wayland_client::protocol::wl_registry::{Event as RegistryEvent};
 use wayland_client::protocol::wl_seat::WlSeat;
 
 use crate::layout_manager::river_layout_v3::river_layout_v3;
@@ -25,34 +25,36 @@ use crate::layout_manager::wayland_client_code::wlr_output_mgmt_unstable_v1::zwl
 use crate::layout_manager::wlr_output_mgmt_unstable_v1::zwlr_output_configuration_v1;
 use crate::layout_manager::wlr_output_mgmt_unstable_v1::zwlr_output_configuration_v1::ZwlrOutputConfigurationV1;
 
-
-use std::env;
-use super::super::monitor::Monitor;
 use super::super::get_monitors_errorless;
+use super::super::monitor::Monitor;
+use std::env;
 
-
-use wayland_client::QueueHandle;
-use wayland_client::{backend::ObjectData};
 use std::sync::Arc;
-
+use wayland_client::QueueHandle;
+use wayland_client::backend::ObjectData;
 
 struct DummyData {
     respond_to_opcode: bool,
 }
 impl ObjectData for DummyData {
     fn event(
-            self: Arc<Self>,
-            _backend: &wayland_backend::client::Backend,
-            msg: wayland_backend::protocol::Message<wayland_backend::client::ObjectId, std::os::unix::prelude::OwnedFd>,
-        ) -> Option<Arc<dyn ObjectData>> {
-            // I dont know, I was debugging, and 3 requies a new dummy object (if we do for the other is also crashes)...
-            // Refers to evt: zwlr_output_head_v1#XXXXXXXXXX.mode(new id zwlr_output_mode_v1#XXXXXXXXXX)
-            // Using the "respond_to_opcode" bool to make the child not respond to zwlr_output_mode_v1#XXXXXXXXXX.finished()
-            if msg.opcode == 3 && self.respond_to_opcode {
-                Some(Arc::new(DummyData {respond_to_opcode: false}))
-            } else {
-                None
-            }
+        self: Arc<Self>,
+        _backend: &wayland_backend::client::Backend,
+        msg: wayland_backend::protocol::Message<
+            wayland_backend::client::ObjectId,
+            std::os::unix::prelude::OwnedFd,
+        >,
+    ) -> Option<Arc<dyn ObjectData>> {
+        // I dont know, I was debugging, and 3 requies a new dummy object (if we do for the other is also crashes)...
+        // Refers to evt: zwlr_output_head_v1#XXXXXXXXXX.mode(new id zwlr_output_mode_v1#XXXXXXXXXX)
+        // Using the "respond_to_opcode" bool to make the child not respond to zwlr_output_mode_v1#XXXXXXXXXX.finished()
+        if msg.opcode == 3 && self.respond_to_opcode {
+            Some(Arc::new(DummyData {
+                respond_to_opcode: false,
+            }))
+        } else {
+            None
+        }
     }
     fn destroyed(&self, _object_id: wayland_backend::client::ObjectId) {}
 }
@@ -73,17 +75,22 @@ struct LayoutState {
 }
 impl Dispatch<WlRegistry, ()> for LayoutState {
     fn event(
-            state: &mut Self,
-            registry: &WlRegistry,
-            event: <WlRegistry as wayland_client::Proxy>::Event,
-            _: &(),
-            _conn: &Connection,
-            qh: &wayland_client::QueueHandle<Self>,
-        ) {
+        state: &mut Self,
+        registry: &WlRegistry,
+        event: <WlRegistry as wayland_client::Proxy>::Event,
+        _: &(),
+        _conn: &Connection,
+        qh: &wayland_client::QueueHandle<Self>,
+    ) {
         match event {
-            RegistryEvent::Global { name, interface, version } => {
+            RegistryEvent::Global {
+                name,
+                interface,
+                version,
+            } => {
                 if interface == "zwlr_output_manager_v1" {
-                    let wlr_output_mgr = registry.bind::<ZwlrOutputManagerV1, _, _>(name, version, qh, ());
+                    let wlr_output_mgr =
+                        registry.bind::<ZwlrOutputManagerV1, _, _>(name, version, qh, ());
                     state.wlr_output = Some(wlr_output_mgr);
                 }
                 if interface == "zriver_control_v1" {
@@ -91,7 +98,8 @@ impl Dispatch<WlRegistry, ()> for LayoutState {
                     state.river_control = Some(control);
                 }
                 if interface == "river_layout_manager_v3" {
-                    let manager = registry.bind::<RiverLayoutManagerV3, _, _>(name, version, qh, ());
+                    let manager =
+                        registry.bind::<RiverLayoutManagerV3, _, _>(name, version, qh, ());
                     state.river_layout_man = Some(manager);
                 }
                 if interface == "wl_seat" {
@@ -101,8 +109,13 @@ impl Dispatch<WlRegistry, ()> for LayoutState {
                 if interface == "wl_output" {
                     let output = registry.bind::<WlOutput, _, _>(name, version, qh, ());
                     if let Some(manager) = &state.river_layout_man {
-                        state.river_layout = Some(manager.get_layout(&output, "river-game-layout".to_string(), qh, ()));
-                        
+                        state.river_layout = Some(manager.get_layout(
+                            &output,
+                            "river-game-layout".to_string(),
+                            qh,
+                            (),
+                        ));
+
                         if let Some(ctrl) = &state.river_control {
                             if let Some(seat) = &state.seat {
                                 println!("Enabling layout!");
@@ -115,7 +128,7 @@ impl Dispatch<WlRegistry, ()> for LayoutState {
                         }
                     }
                     state.outputs_name = name;
-                    state.outputs+=1;
+                    state.outputs += 1;
                 }
             }
             RegistryEvent::GlobalRemove { name } => {
@@ -148,34 +161,37 @@ impl Dispatch<ZwlrOutputManagerV1, ()> for LayoutState {
         qh: &wayland_client::QueueHandle<Self>,
     ) {
         match event {
-            zwlr_output_manager_v1::Event::Done { serial }  => {
+            zwlr_output_manager_v1::Event::Done { serial } => {
                 if !state.wlr_output_done {
                     if let Some(output_manager) = &state.wlr_output {
-                    if let Some(head) = &state.output_head {
+                        if let Some(head) = &state.output_head {
                             let output_config = output_manager.create_configuration(serial, qh, ());
                             let output_config_head = output_config.enable_head(head, qh, ());
-                            output_config_head.set_custom_mode(state.layout_width, state.layout_height, 0); // Refresh must be 0 or will be denied by some compositors
+                            output_config_head.set_custom_mode(
+                                state.layout_width,
+                                state.layout_height,
+                                0,
+                            ); // Refresh must be 0 or will be denied by some compositors
                             output_config.apply();
                             state.pending_config = Some(output_config);
-                    }
+                        }
                     }
                 }
             }
-            zwlr_output_manager_v1::Event::Head { head }  => {
+            zwlr_output_manager_v1::Event::Head { head } => {
                 state.output_head = Some(head);
             }
             _ => {}
         }
     }
 
-    
     fn event_created_child(_opcode: u16, _qh: &QueueHandle<Self>) -> Arc<dyn ObjectData> {
         println!("Output manager created child");
-        Arc::new(DummyData {respond_to_opcode: true})
+        Arc::new(DummyData {
+            respond_to_opcode: true,
+        })
     }
 }
-
-
 
 impl Dispatch<ZwlrOutputConfigurationV1, ()> for LayoutState {
     fn event(
@@ -204,7 +220,6 @@ impl Dispatch<ZwlrOutputConfigurationV1, ()> for LayoutState {
     }
 }
 
-
 impl Dispatch<RiverLayoutV3, ()> for LayoutState {
     fn event(
         state: &mut Self,
@@ -215,39 +230,46 @@ impl Dispatch<RiverLayoutV3, ()> for LayoutState {
         _: &wayland_client::QueueHandle<Self>,
     ) {
         match event {
-            river_layout_v3::Event::LayoutDemand { view_count, usable_width, usable_height, tags: _, serial } => {
-                if let Some(layout) = &state.river_layout {
-                    let (mut w,mut h) = (0, 0);
+            river_layout_v3::Event::LayoutDemand {
+                view_count,
+                usable_width,
+                usable_height,
+                tags: _,
+                serial,
+            } => {
+                let Some(layout) = &state.river_layout else {
+                    return;
+                };
 
-                    while w * h < view_count {
-                        if usable_width * h * 9 > usable_height * w * 16 {
-                            w+=1;
-                        } else {
-                            h+=1;
-                        }
+                let (mut w, mut h) = (0, 0);
+
+                while w * h < view_count {
+                    if usable_width * h * 9 > usable_height * w * 16 {
+                        w += 1;
+                    } else {
+                        h += 1;
                     }
-
-                    while view_count <= w*(h-1) {h-=1};
-                    while view_count <= (w-1)*h {w-=1};
-
-
-                    for i in 0..view_count {
-                        let mut cur_row_width = w - ((i%h >= (view_count-1)%h+1) as u32);
-
-                        if cur_row_width == 0 {
-                            cur_row_width = 1;
-                        }
-
-                        layout.push_view_dimensions(
-                            ((i / h) * usable_width / cur_row_width) as i32,
-                            ((i % h) * usable_height / h) as i32,
-                            (usable_width / cur_row_width) as u32,
-                            (usable_height / h) as u32,
-                            serial
-                        );
-                    }
-                    layout.commit("[]=".to_string(), serial); // []= is the layout name, using this due to its default in other managers.
                 }
+
+                while view_count <= w * (h - 1) {
+                    h -= 1
+                }
+                while view_count <= (w - 1) * h {
+                    w -= 1
+                }
+
+                for i in 0..view_count {
+                    let cur_row_width = (w - ((i % h >= (view_count - 1) % h + 1) as u32)).max(1);
+
+                    layout.push_view_dimensions(
+                        ((i / h) * usable_width / cur_row_width) as i32,
+                        ((i % h) * usable_height / h) as i32,
+                        (usable_width / cur_row_width) as u32,
+                        (usable_height / h) as u32,
+                        serial,
+                    );
+                }
+                layout.commit("[]=".to_string(), serial); // []= is the layout name, using this due to its default in other managers.
             }
             _ => {}
         }
@@ -258,19 +280,18 @@ macro_rules! impl_empty_dispatch {
     ($state:ty, $iface:ty) => {
         impl Dispatch<$iface, ()> for $state {
             fn event(
-                    _state: &mut $state,
-                    _proxy: &$iface,
-                    _event: <$iface as wayland_client::Proxy>::Event,
-                    _data: &(),
-                    _conn: &Connection,
-                    _qhandle: &wayland_client::QueueHandle<$state>,
-                ) {
+                _state: &mut $state,
+                _proxy: &$iface,
+                _event: <$iface as wayland_client::Proxy>::Event,
+                _data: &(),
+                _conn: &Connection,
+                _qhandle: &wayland_client::QueueHandle<$state>,
+            ) {
                 // ignore
             }
         }
     };
 }
-
 
 impl_empty_dispatch!(LayoutState, ZriverCommandCallbackV1);
 impl_empty_dispatch!(LayoutState, ZriverControlV1);
@@ -278,36 +299,38 @@ impl_empty_dispatch!(LayoutState, RiverLayoutManagerV3);
 impl_empty_dispatch!(LayoutState, WlSeat);
 impl_empty_dispatch!(LayoutState, WlOutput);
 
-
 impl_empty_dispatch!(LayoutState, ZwlrOutputConfigurationHeadV1);
 impl_empty_dispatch!(LayoutState, ZwlrOutputModeV1);
 impl_empty_dispatch!(LayoutState, ZwlrOutputHeadV1);
-
 
 fn flush_file_data_layout_manager(fd: i32, main_monitor: &Monitor) {
     let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
 
     let way_disp_str = env::var_os("WAYLAND_DISPLAY").expect("Failed to decode wayland display");
-    let x11_disp_str = env::var_os("DISPLAY"        ).expect("Failed to decode x11 display"    );
+    let x11_disp_str = env::var_os("DISPLAY").expect("Failed to decode x11 display");
     let way_disp = way_disp_str.as_encoded_bytes();
     let x11_disp = x11_disp_str.as_encoded_bytes();
-    let mut buf = Vec::with_capacity(4+4+4+4+way_disp.len()+x11_disp.len());
+    let mut buf = Vec::with_capacity(4 + 4 + 4 + 4 + way_disp.len() + x11_disp.len());
     buf.extend_from_slice(&(way_disp.len() as u32).to_be_bytes());
     buf.extend_from_slice(&(x11_disp.len() as u32).to_be_bytes());
-    buf.extend_from_slice(&(main_monitor.width()  as u32).to_be_bytes());
+    buf.extend_from_slice(&(main_monitor.width() as u32).to_be_bytes());
     buf.extend_from_slice(&(main_monitor.height() as u32).to_be_bytes());
     buf.extend_from_slice(way_disp);
     buf.extend_from_slice(x11_disp);
     file.write_all(&buf).expect("Failed to write display data");
-    println!("Wrote monitor info over fd: X11: {:?}, Wayland: {:?}, Width: {}, Heigh: {}", x11_disp_str, way_disp_str, main_monitor.width(), main_monitor.height());
+    println!(
+        "Wrote monitor info over fd: X11: {:?}, Wayland: {:?}, Width: {}, Heigh: {}",
+        x11_disp_str,
+        way_disp_str,
+        main_monitor.width(),
+        main_monitor.height()
+    );
 
     let _ = file.flush();
     drop(file);
 }
 
 pub fn start_layout_manager(fd: i32, layout_width: i32, layout_height: i32) {
- 
-
     let conn = Connection::connect_to_env().expect("Failed to connect to wayland session");
     let mut event_queue = conn.new_event_queue();
     let qh = event_queue.handle();
@@ -359,16 +382,13 @@ pub fn start_layout_manager(fd: i32, layout_width: i32, layout_height: i32) {
                     ctrl.add_argument("border-width".to_string());
                     ctrl.add_argument("0".to_string());
                     ctrl.run_command(seat, &qh, ());
-                    
+
                     has_ran_startup_commands = true;
                 }
             }
         }
     }
-
-
 }
-
 
 // Sends the splitscreen script to the active KWin session through DBus
 pub fn kwin_dbus_start_script(file: PathBuf) -> Result<(), Box<dyn Error>> {

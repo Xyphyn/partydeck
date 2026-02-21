@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::app::{PartyConfig, PadFilterType};
+use crate::app::{PadFilterType, PartyConfig};
 use crate::handler::*;
 use crate::input::*;
 use crate::instance::*;
@@ -11,8 +11,8 @@ use crate::profiles::{create_profile, create_profile_gamesave};
 use crate::util::*;
 use nix::sys::signal::{Signal, kill};
 use nix::sys::wait::{WaitStatus, waitpid};
-use std::collections::HashSet;
 use nix::unistd::Pid;
+use std::collections::HashSet;
 
 use crate::layout_manager::kwin_dbus_start_script;
 
@@ -42,23 +42,22 @@ pub fn launch_game(
     input_devices: &[DeviceInfo],
     instances: &mut Vec<Instance>,
     cfg: &PartyConfig,
-    primary_monitor: Monitor
+    primary_monitor: Monitor,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (way_display_name, x11_display_name, compositor_pid) = 
-    if let Some(compositor) = &cfg.nested_compositor {
-        let (way_name, x11_name, monitor, pid) = 
-            spawn_comp_and_get_display(compositor, primary_monitor)
-                .ok_or("Failed to spawn nested compositor and get display names")?;
+    let (way_display_name, x11_display_name, compositor_pid) =
+        if let Some(compositor) = &cfg.nested_compositor {
+            let (way_name, x11_name, monitor, pid) =
+                spawn_comp_and_get_display(compositor, primary_monitor)
+                    .ok_or("Failed to spawn nested compositor and get display names")?;
 
-        set_instance_resolutions(instances, &monitor, cfg, compositor == "river");
+            set_instance_resolutions(instances, &monitor, cfg, compositor == "river");
 
-        (Some(way_name), Some(x11_name), Some(pid))
-    } else {
-        (None, None, None)
-    };
+            (Some(way_name), Some(x11_name), Some(pid))
+        } else {
+            (None, None, None)
+        };
 
     let mut wait_processes = HashSet::new();
-
 
     let new_cmds = launch_cmds(h, input_devices, instances, cfg)?;
     print_launch_cmds(&new_cmds);
@@ -69,7 +68,8 @@ pub fn launch_game(
             false => "splitscreen_kwin.js",
         };
 
-        kwin_dbus_start_script(PATH_RES.join(script)).map_err(|e| format!("Failed to start KWin script: {}", e))?;
+        kwin_dbus_start_script(PATH_RES.join(script))
+            .map_err(|e| format!("Failed to start KWin script: {}", e))?;
     }
 
     let sleep_time = match h.pause_between_starts {
@@ -89,7 +89,9 @@ pub fn launch_game(
         if let Some(disp) = &x11_display_name {
             cmd.env("DISPLAY", disp);
         }
-        let handle = cmd.spawn().map_err(|e| format!("Game argument error: {}" , e))?;
+        let handle = cmd
+            .spawn()
+            .map_err(|e| format!("Game argument error: {}", e))?;
         wait_processes.insert(Pid::from_raw(handle.id() as i32));
         handles.push(handle);
 
@@ -104,7 +106,7 @@ pub fn launch_game(
             WaitStatus::Exited(pid, _) | WaitStatus::Signaled(pid, _, _) => {
                 println!("Child pid {} died!", pid);
                 wait_processes.remove(&pid);
-                println!("CHILD PROCESSES LEFT: {}",wait_processes.len());
+                println!("CHILD PROCESSES LEFT: {}", wait_processes.len());
                 if wait_processes.len() == 0 || Some(pid) == compositor_pid {
                     break;
                 }
@@ -114,7 +116,9 @@ pub fn launch_game(
         }
     }
 
-    wait_processes.iter().for_each(|&pid| _ = kill(pid, Signal::SIGTERM));
+    wait_processes
+        .iter()
+        .for_each(|&pid| _ = kill(pid, Signal::SIGTERM));
 
     if let Some(comp_pid) = compositor_pid {
         let _ = kill(comp_pid, Signal::SIGTERM);
@@ -143,10 +147,16 @@ pub fn launch_cmds(
                 .join("steam/steamapps/common/SteamLinuxRuntime_soldier")
                 .exists())
         || (runtime == "sniper"
-            && !PATH_STEAM.join("steam/steamapps/common/SteamLinuxRuntime_sniper").exists()
-            && !PATH_STEAM.join("steam/steamapps/common/SteamLinuxRuntime_sniper-arm64").exists())
+            && !PATH_STEAM
+                .join("steam/steamapps/common/SteamLinuxRuntime_sniper")
+                .exists()
+            && !PATH_STEAM
+                .join("steam/steamapps/common/SteamLinuxRuntime_sniper-arm64")
+                .exists())
         || (runtime == "steamrt4"
-            && !PATH_STEAM.join("steam/steamapps/common/SteamLinuxRuntime_4").exists())
+            && !PATH_STEAM
+                .join("steam/steamapps/common/SteamLinuxRuntime_4")
+                .exists())
     {
         return Err(format!("Steam Runtime {runtime} not found! Runtime must be installed on the same drive that the Steam client is installed on.").into());
     }
@@ -156,11 +166,12 @@ pub fn launch_cmds(
         .collect();
 
     for (i, instance) in instances.iter().enumerate() {
-        let gamedir = if h.is_saved_handler() && !cfg.disable_mount_gamedirs && cfg.profile_unique_dirs {
-            PATH_PARTY.join("tmp").join(format!("game-{}", i))
-        } else {
-            PathBuf::from(h.get_game_rootpath()?)
-        };
+        let gamedir =
+            if h.is_saved_handler() && !cfg.disable_mount_gamedirs && cfg.profile_unique_dirs {
+                PATH_PARTY.join("tmp").join(format!("game-{}", i))
+            } else {
+                PathBuf::from(h.get_game_rootpath()?)
+            };
 
         if !gamedir.join(exec).exists() {
             return Err(format!("Executable not found: {}", gamedir.join(exec).display()).into());
@@ -212,7 +223,10 @@ pub fn launch_cmds(
             cmd.env("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "1");
         }
         if cfg.pad_filter_type == PadFilterType::OnlySteamInput {
-            cmd.env("SDL_GAMECONTROLLER_IGNORE_DEVICES", SDL_GAMECONTROLLER_IGNORE_DEVICES);
+            cmd.env(
+                "SDL_GAMECONTROLLER_IGNORE_DEVICES",
+                SDL_GAMECONTROLLER_IGNORE_DEVICES,
+            );
         }
         if !h.env.is_empty() {
             for env_var in h.env.split_whitespace() {
@@ -224,7 +238,7 @@ pub fn launch_cmds(
 
         // Gamescope args
         if cfg.gamescope_resize_support {
-            cmd.args(["--nested-follow-window-scale","1"]);
+            cmd.args(["--nested-follow-window-scale", "1"]);
         }
         if cfg.gamescope_force_fullscreen {
             cmd.arg("--force-windows-fullscreen");
@@ -331,18 +345,16 @@ pub fn launch_cmds(
                 cmd.env("SteamGameId", &appid.to_string());
             }
 
-            let sdk32_link = std::fs::read_link(PATH_STEAM.join("sdk32")).map_err(|e| format!("Failed to read sdk32 link: {}", e))?;
-            let sdk64_link = std::fs::read_link(PATH_STEAM.join("sdk64")).map_err(|e| format!("Failed to read sdk64 link: {}", e))?;
+            let sdk32_link = std::fs::read_link(PATH_STEAM.join("sdk32"))
+                .map_err(|e| format!("Failed to read sdk32 link: {}", e))?;
+            let sdk64_link = std::fs::read_link(PATH_STEAM.join("sdk64"))
+                .map_err(|e| format!("Failed to read sdk64 link: {}", e))?;
 
-            cmd.arg("--bind").args([
-                PATH_RES.join("goldberg/linux32"),
-                sdk32_link,
-            ]);
+            cmd.arg("--bind")
+                .args([PATH_RES.join("goldberg/linux32"), sdk32_link]);
 
-            cmd.arg("--bind").args([
-                PATH_RES.join("goldberg/linux64"),
-                sdk64_link,
-            ]);
+            cmd.arg("--bind")
+                .args([PATH_RES.join("goldberg/linux64"), sdk64_link]);
 
             if win {
                 cmd.arg("--bind").args([
@@ -369,9 +381,8 @@ pub fn launch_cmds(
                     cmd.arg("--");
                 }
                 "sniper" => {
-                    let sniper_path = PATH_STEAM.join(
-                        "steam/steamapps/common/SteamLinuxRuntime_sniper/_v2-entry-point",
-                    );
+                    let sniper_path = PATH_STEAM
+                        .join("steam/steamapps/common/SteamLinuxRuntime_sniper/_v2-entry-point");
                     // old installations of sniper go in a folder named -arm64 even though it is x86_64?
                     let sniper_arm_path = PATH_STEAM.join(
                         "steam/steamapps/common/SteamLinuxRuntime_sniper-arm64/_v2-entry-point",
@@ -385,9 +396,8 @@ pub fn launch_cmds(
                 }
                 "steamrt4" => {
                     cmd.arg(
-                        PATH_STEAM.join(
-                            "steam/steamapps/common/SteamLinuxRuntime_4/_v2-entry-point",
-                        ),
+                        PATH_STEAM
+                            .join("steam/steamapps/common/SteamLinuxRuntime_4/_v2-entry-point"),
                     );
                     cmd.arg("--");
                 }

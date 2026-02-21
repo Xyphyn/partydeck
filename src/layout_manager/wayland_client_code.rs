@@ -28,9 +28,13 @@ pub mod wlr_output_mgmt_unstable_v1 {
 
     pub mod __interfaces {
         // use wayland_client::protocol::__interfaces::*; // Unused
-        wayland_scanner::generate_interfaces!("./src/layout_manager/wlr-output-management-unstable-v1.xml");
+        wayland_scanner::generate_interfaces!(
+            "./src/layout_manager/wlr-output-management-unstable-v1.xml"
+        );
     }
     use self::__interfaces::*;
 
-    wayland_scanner::generate_client_code!("./src/layout_manager/wlr-output-management-unstable-v1.xml");
+    wayland_scanner::generate_client_code!(
+        "./src/layout_manager/wlr-output-management-unstable-v1.xml"
+    );
 }

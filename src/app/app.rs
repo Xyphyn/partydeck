@@ -5,10 +5,10 @@ use crate::handler::*;
 use crate::input::*;
 use crate::instance::*;
 use crate::launch::*;
+use crate::layout_manager;
 use crate::monitor::Monitor;
 use crate::profiles::*;
 use crate::util::*;
-use crate::layout_manager;
 
 use eframe::egui::{self, Key};
 
@@ -452,7 +452,9 @@ impl PartyApp {
                     msg("Failed mounting game directories", &format!("{err}"));
                     return;
                 }
-                if let Err(err) = launch_game(&handler, &dev_infos, &mut instances, &cfg, clone_monitor) {
+                if let Err(err) =
+                    launch_game(&handler, &dev_infos, &mut instances, &cfg, clone_monitor)
+                {
                     println!("[partydeck] Error launching instances: {}", err);
                     msg("Launch Error", &format!("{err}"));
                 }

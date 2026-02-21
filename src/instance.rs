@@ -1,5 +1,5 @@
-use crate::monitor::Monitor;
 use crate::app::PartyConfig;
+use crate::monitor::Monitor;
 use crate::profiles::GUEST_NAMES;
 
 #[derive(Clone)]
@@ -21,20 +21,24 @@ pub fn set_instance_resolutions(
     let (basewidth, baseheight) = (primary_monitor.width(), primary_monitor.height());
     let playercount = instances.len() as u32;
     if use_river_layout {
-        let (mut w,mut h) = (0 as u32, 0 as u32);
+        let (mut w, mut h) = (0 as u32, 0 as u32);
         while w * h < playercount {
             if basewidth * h * 9 > baseheight * w * 16 {
-                w+=1;
+                w += 1;
             } else {
-                h+=1;
+                h += 1;
             }
         }
 
-        while playercount <= w*(h-1) {h-=1};
-        while playercount <= (w-1)*h {w-=1};
+        while playercount <= w * (h - 1) {
+            h -= 1
+        }
+        while playercount <= (w - 1) * h {
+            w -= 1
+        }
 
         for i in 0..playercount {
-            let mut cur_row_width = w - ((i%h >= (playercount-1)%h+1) as u32);
+            let mut cur_row_width = w - ((i % h >= (playercount - 1) % h + 1) as u32);
 
             if cur_row_width == 0 {
                 cur_row_width = 1;
