@@ -44,17 +44,18 @@ pub fn launch_game(
     cfg: &PartyConfig,
     primary_monitor: Monitor
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut compositor_pid = None;
-    let mut way_display_name = None;
-    let mut x11_display_name = None;
-    if let Some(compositor) = &cfg.nested_compositor { // check if we should use river
-        let (way_display_name_tmp, x11_display_name_tmp, compositor_monitor,  compositor_pid_tmp) = spawn_comp_and_get_display( &compositor, primary_monitor).expect("Failed to get display name!");
-        compositor_pid = Some(compositor_pid_tmp);
-        way_display_name = Some(way_display_name_tmp);
-        x11_display_name = Some(x11_display_name_tmp);
+    let (way_display_name, x11_display_name, compositor_pid) = 
+    if let Some(compositor) = &cfg.nested_compositor {
+        let (way_name, x11_name, monitor, pid) = 
+            spawn_comp_and_get_display(compositor, primary_monitor)
+                .ok_or("Failed to spawn nested compositor and get display names")?;
 
-        set_instance_resolutions(instances, &compositor_monitor, cfg, compositor=="river");
-    }
+        set_instance_resolutions(instances, &monitor, cfg, compositor == "river");
+
+        (Some(way_name), Some(x11_name), Some(pid))
+    } else {
+        (None, None, None)
+    };
 
     let mut wait_processes = HashSet::new();
 
@@ -88,8 +89,8 @@ pub fn launch_game(
         if let Some(disp) = &x11_display_name {
             cmd.env("DISPLAY", disp);
         }
-        let handle = cmd.spawn().expect("Game argument error");
-        wait_processes.insert(Pid::from_raw((handle.id()) as i32));
+        let handle = cmd.spawn().map_err(|e| format!("Game argument error: {}" , e))?;
+        wait_processes.insert(Pid::from_raw(handle.id() as i32));
         handles.push(handle);
 
         if i < instances.len() - 1 {
@@ -113,9 +114,8 @@ pub fn launch_game(
         }
     }
 
-    for pid in wait_processes {
-        let _ = kill(pid, Signal::SIGTERM);
-    }
+    wait_processes.iter().for_each(|&pid| _ = kill(pid, Signal::SIGTERM));
+
     if let Some(comp_pid) = compositor_pid {
         let _ = kill(comp_pid, Signal::SIGTERM);
     }
@@ -224,7 +224,7 @@ pub fn launch_cmds(
 
         // Gamescope args
         if cfg.gamescope_resize_support {
-            cmd.args(["--nested-folow-window-scale","1"]);
+            cmd.args(["--nested-follow-window-scale","1"]);
         }
         if cfg.gamescope_force_fullscreen {
             cmd.arg("--force-windows-fullscreen");

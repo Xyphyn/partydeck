@@ -50,8 +50,9 @@ pub struct PartyConfig {
     pub profile_unique_dirs: bool,
     #[serde(default)]
     pub disable_mount_gamedirs: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub check_for_updates: bool,
+    #[serde(default)]
     pub nested_compositor: Option<String>,
 }
 

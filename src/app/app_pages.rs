@@ -571,7 +571,7 @@ impl PartyApp {
             "Unique per-profile environments",
         );
         if profile_unique_dirs_check.hovered() {
-        self.infotext = "DEFAULT: Enabled\n\nGives each profile their own data directories. For Windows games, this is the C:\\Users\\steamuser folder, for Linux native games this is the HOME directory. Note that disabling this means that PartyDeck instances may potentially modify your game's actual save data on disk.".to_string();
+            self.infotext = "DEFAULT: Enabled\n\nGives each profile their own data directories. For Windows games, this is the C:\\Users\\steamuser folder, for Linux native games this is the HOME directory. Note that disabling this means that PartyDeck instances may potentially modify your game's actual save data on disk.".to_string();
         }
 
         let allow_multiple_instances_on_same_device_check = ui.checkbox(
