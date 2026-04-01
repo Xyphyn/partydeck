@@ -93,6 +93,7 @@ pub fn launch_game(
             .spawn()
             .map_err(|e| format!("Game argument error: {}", e))?;
         wait_processes.insert(Pid::from_raw(handle.id() as i32));
+        
         handles.push(handle);
 
         if i < instances.len() - 1 {
@@ -140,6 +141,14 @@ pub fn launch_cmds(
         true => BIN_GSC_KBM.as_path(),
         false => Path::new("gamescope"),
     };
+
+    if cfg.kbm_support && !gamescope.exists() {
+        return Err("gamescope-kbm is missing. Please reinstall partydeck or disable KBM support.".into());
+    }
+
+    if !cfg.kbm_support && pathsearch::find_executable_in_path("gamescope").is_none() {
+        return Err("gamescope not found in PATH. Please install gamescope through your distro's package manager.".into());
+    }
 
     if (runtime == "scout" && !PATH_STEAM.join("bin32/steam-runtime/run.sh").exists())
         || (runtime == "soldier"
@@ -242,6 +251,10 @@ pub fn launch_cmds(
         }
         if cfg.gamescope_force_fullscreen {
             cmd.arg("--force-windows-fullscreen");
+        }
+
+        if h.use_mangohud {
+            cmd.arg("--mangoapp");
         }
 
         cmd.args([
